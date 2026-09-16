@@ -1,0 +1,21 @@
+node_modules/
+.DS_Store
+*.local
+.env
+.env.local
+# GitHub token should NEVER be committed
+gist-token.json
+# Build output
+dist/
+build/
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+# OS
+Thumbs.db
+ehthumbs.db
+# Logs
+*.log
+npm-debug.log*
