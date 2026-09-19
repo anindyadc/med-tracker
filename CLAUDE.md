@@ -38,6 +38,8 @@ index.html            login page (entry point; no signup link)
 app.html               authenticated app shell, hash-routed (#dashboard/#medications/#inventory/#history/#settings)
 manifest.json
 service-worker.js
+firestore.rules        Firestore Security Rules (source of truth, see below)
+firebase.json           points the Firebase CLI at firestore.rules (optional, for `firebase deploy --only firestore:rules`)
 
 css/
   tokens.css          palette / spacing / shadow / type-scale custom properties (dark-first, light override via data-theme)
@@ -111,16 +113,12 @@ Re-run on app load, on `visibilitychange`, and on a ~60s interval while the app 
 
 ## Security rules (Firestore)
 
-```
-function isAllowed() {
-  return request.auth != null &&
-    exists(/databases/$(database)/documents/allowlist/$(request.auth.uid));
-}
-match /allowlist/{uid} { allow read, write: if false; }
-match /medications/{id} { allow read, write: if isAllowed(); }
-match /doseLogs/{id}    { allow read, write: if isAllowed(); }
-match /settings/{uid}   { allow read, write: if isAllowed() && request.auth.uid == uid; }
-```
+The rules live in [`firestore.rules`](./firestore.rules) (with a matching [`firebase.json`](./firebase.json)
+so they're deployable via `firebase deploy --only firestore:rules` if you ever install the Firebase CLI —
+otherwise just paste the file's contents into Firebase Console → Firestore Database → Rules). Summary:
+an `isAllowed()` helper checks the caller's UID exists in the `allowlist` collection; `medications` and
+`doseLogs` are readable/writable by any allowlisted caregiver; `settings/{uid}` is restricted to its own
+owner; `allowlist` itself is never readable or writable from the client.
 
 Client-side, treat any `permission-denied` Firestore error (including the very first read right after
 login) as "this account is not allowlisted": force sign-out and show a clear message. Don't try to read
@@ -162,7 +160,8 @@ notification support is more limited/version-gated — that's a platform constra
 
 1. Create a Firebase project (free **Spark** plan — sufficient for this app's scale).
 2. Authentication → Sign-in method → enable **Email/Password** only.
-3. Firestore Database → create in **production mode** → paste in the rules above immediately.
+3. Firestore Database → create in **production mode** → paste in the contents of `firestore.rules`
+   (Firestore Database → Rules) immediately.
 4. Authentication → Users → manually add one account per caregiver.
 5. For each account, copy its UID and create a matching doc at `allowlist/{uid}` in Firestore
    (`email`, `displayName`, `addedAt`).

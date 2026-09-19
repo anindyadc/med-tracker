@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>MedTracker</title>
+  <meta name="description" content="Medication inventory, dosage scheduling, and missed-dose tracking." />
+  <meta name="theme-color" content="#0f1225" />
+
+  <link rel="icon" type="image/svg+xml" href="icons/favicon.svg" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="manifest" href="manifest.json" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="css/tokens.css" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <link rel="stylesheet" href="css/pages/dashboard.css" />
+  <link rel="stylesheet" href="css/pages/medications.css" />
+  <link rel="stylesheet" href="css/pages/inventory.css" />
+  <link rel="stylesheet" href="css/pages/history.css" />
+  <link rel="stylesheet" href="css/pages/settings.css" />
+</head>
+<body>
+  <div id="app-shell" class="app-shell" hidden>
+    <nav class="nav-bar">
+      <div class="brand">
+        <img src="icons/icon-192.png" alt="" width="32" height="32" />
+        <span class="brand-name" style="font-size: var(--font-lg);">MedTracker</span>
+      </div>
+      <button class="nav-item" data-view="dashboard" data-nav>
+        <img src="https://cdn.jsdelivr.net/npm/lucide-static@0.462.0/icons/layout-dashboard.svg" alt="" />
+        <span>Today</span>
+      </button>
+      <button class="nav-item" data-view="medications" data-nav>
+        <img src="https://cdn.jsdelivr.net/npm/lucide-static@0.462.0/icons/pill.svg" alt="" />
+        <span>Meds</span>
+      </button>
+      <button class="nav-item" data-view="inventory" data-nav>
+        <img src="https://cdn.jsdelivr.net/npm/lucide-static@0.462.0/icons/package.svg" alt="" />
+        <span>Stock</span>
+      </button>
+      <button class="nav-item" data-view="history" data-nav>
+        <img src="https://cdn.jsdelivr.net/npm/lucide-static@0.462.0/icons/history.svg" alt="" />
+        <span>History</span>
+      </button>
+      <button class="nav-item" data-view="settings" data-nav>
+        <img src="https://cdn.jsdelivr.net/npm/lucide-static@0.462.0/icons/settings.svg" alt="" />
+        <span>Settings</span>
+      </button>
+    </nav>
+
+    <main style="flex:1; min-width:0;">
+      <section class="view" data-view="dashboard" id="dashboard-content"></section>
+      <section class="view" data-view="medications" id="medications-content" hidden></section>
+      <section class="view" data-view="inventory" id="inventory-content" hidden></section>
+      <section class="view" data-view="history" id="history-content" hidden></section>
+      <section class="view" data-view="settings" id="settings-content" hidden></section>
+    </main>
+  </div>
+
+  <div id="auth-loading" class="login-screen">
+    <p class="about-text">Loading&hellip;</p>
+  </div>
+
+  <div id="modal-backdrop" class="modal-backdrop" hidden>
+    <div id="modal-content" class="glass-card modal"></div>
+  </div>
+
+  <p id="toast" class="toast" hidden></p>
+
+  <script type="module">
+    import { watchAuthState, onAccessDenied, logout } from './js/auth.js';
+    import { registerView, navigate, startRouter, onViewChange } from './js/router.js';
+    import { renderDashboard, getDueOccurrencesForNotifications } from './js/ui/dashboard.js';
+    import { renderMedications } from './js/ui/medications.js';
+    import { renderInventory } from './js/ui/inventory-view.js';
+    import { renderHistory } from './js/ui/history.js';
+    import { renderSettings } from './js/ui/settings.js';
+    import { startDueDoseWatcher, onNotificationAction } from './js/notifications.js';
+    import { markDoseTaken, getMedication } from './js/db.js';
+    import { showToast } from './js/ui/shared.js';
+    import { currentUser } from './js/auth.js';
+    import { scheduledDateTime } from './js/date-utils.js';
+
+    const shell = document.getElementById('app-shell');
+    const loading = document.getElementById('auth-loading');
+
+    registerView('dashboard', { onEnter: renderDashboard });
+    registerView('medications', { onEnter: renderMedications });
+    registerView('inventory', { onEnter: renderInventory });
+    registerView('history', { onEnter: renderHistory });
+    registerView('settings', { onEnter: renderSettings });
+
+    onViewChange((name) => {
+      document.querySelectorAll('[data-nav]').forEach((btn) => {
+        btn.classList.toggle('is-active', btn.dataset.view === name);
+      });
+    });
+
+    document.querySelectorAll('[data-nav]').forEach((btn) => {
+      btn.addEventListener('click', () => navigate(btn.dataset.view));
+    });
+
+    onAccessDenied(async () => {
+      showToast('This account is not authorized for MedTracker.');
+      await logout();
+      window.location.replace('index.html');
+    });
+
+    watchAuthState(
+      () => {
+        loading.hidden = true;
+        shell.hidden = false;
+        startRouter();
+        startDueDoseWatcher(getDueOccurrencesForNotifications);
+      },
+      () => {
+        window.location.replace('index.html');
+      }
+    );
+
+    onNotificationAction(async (action, data) => {
+      if (action === 'mark-taken' && data?.medicationId) {
+        try {
+          const med = await getMedication(data.medicationId);
+          const entry = med?.schedule?.find((s) => s.time === data.scheduledTime);
+          await markDoseTaken({
+            medicationId: data.medicationId,
+            medicationName: med?.name || '',
+            scheduledDate: data.scheduledDate,
+            scheduledTime: data.scheduledTime,
+            scheduledDateTime: scheduledDateTime(data.scheduledDate, data.scheduledTime),
+            quantity: entry?.quantity ?? 1,
+            uid: currentUser()?.uid
+          });
+        } catch (err) {
+          console.warn('Could not mark dose taken from notification action:', err);
+        } finally {
+          renderDashboard();
+        }
+      }
+    });
+  </script>
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('service-worker.js');
+    }
+  </script>
+</body>
+</html>

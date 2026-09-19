@@ -1,0 +1,95 @@
+.dashboard-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: var(--space-5);
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.dashboard-header .date {
+  color: var(--text-secondary);
+  font-size: var(--font-sm);
+}
+
+.alert-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--status-due-bg);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  color: var(--status-due);
+  font-size: var(--font-sm);
+  font-weight: 600;
+  margin-bottom: var(--space-5);
+}
+
+.dose-section {
+  margin-bottom: var(--space-6);
+}
+
+.dose-section h2 {
+  font-size: var(--font-lg);
+  margin-bottom: var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.dose-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+}
+
+.dose-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+
+.dose-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dose-card-info .med-name {
+  font-weight: 700;
+  font-size: var(--font-md);
+}
+
+.dose-card-info .med-meta {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+}
+
+.dose-card-time {
+  font-family: var(--font-heading);
+  font-size: var(--font-lg);
+  font-weight: 700;
+  color: var(--text-secondary);
+  min-width: 68px;
+  text-align: center;
+}
+
+.dose-card-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.dose-card.status-taken { opacity: 0.6; }
+.dose-card.status-missed { border-color: rgba(248, 113, 113, 0.35); }
+.dose-card.status-due { border-color: rgba(251, 191, 36, 0.4); }
+
+@media (min-width: 900px) {
+  .dose-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

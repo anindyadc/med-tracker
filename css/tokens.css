@@ -1,0 +1,90 @@
+:root {
+  --bg-grad-1: #1b1f3b;
+  --bg-grad-2: #0f1225;
+  --surface: rgba(255, 255, 255, 0.06);
+  --surface-strong: rgba(255, 255, 255, 0.1);
+  --border-soft: rgba(255, 255, 255, 0.12);
+  --text-primary: #f4f6ff;
+  --text-secondary: rgba(244, 246, 255, 0.68);
+  --text-muted: rgba(244, 246, 255, 0.45);
+
+  --accent-cyan: #22d3ee;
+  --accent-violet: #818cf8;
+  --accent-grad: linear-gradient(135deg, var(--accent-cyan), var(--accent-violet));
+
+  --status-taken: #34d399;
+  --status-taken-bg: rgba(52, 211, 153, 0.14);
+  --status-due: #fbbf24;
+  --status-due-bg: rgba(251, 191, 36, 0.14);
+  --status-missed: #f87171;
+  --status-missed-bg: rgba(248, 113, 113, 0.14);
+  --status-upcoming: #94a3b8;
+  --status-upcoming-bg: rgba(148, 163, 184, 0.12);
+
+  --font-heading: "Sora", "Manrope", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, sans-serif;
+
+  --font-xs: 0.75rem;
+  --font-sm: 0.875rem;
+  --font-md: 1rem;
+  --font-lg: 1.25rem;
+  --font-xl: 1.563rem;
+  --font-2xl: 1.953rem;
+  --font-3xl: 2.441rem;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  --radius-sm: 12px;
+  --radius-md: 20px;
+  --radius-lg: 28px;
+  --radius-pill: 999px;
+
+  --shadow-ambient: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-far: 0 24px 48px rgba(0, 0, 0, 0.25);
+  --shadow-inset-highlight: inset 0 1px 1px rgba(255, 255, 255, 0.08);
+
+  --tab-bar-height: 72px;
+  --sidebar-width: 240px;
+
+  --transition-fast: 120ms ease-out;
+  --transition-base: 200ms ease-out;
+  --transition-slow: 320ms ease-out;
+}
+
+:root[data-theme="light"] {
+  --bg-grad-1: #eef0fb;
+  --bg-grad-2: #f7f8fd;
+  --surface: rgba(15, 18, 37, 0.04);
+  --surface-strong: rgba(15, 18, 37, 0.07);
+  --border-soft: rgba(15, 18, 37, 0.1);
+  --text-primary: #12142b;
+  --text-secondary: rgba(18, 20, 43, 0.68);
+  --text-muted: rgba(18, 20, 43, 0.48);
+
+  --shadow-ambient: 0 8px 24px rgba(15, 18, 37, 0.08);
+  --shadow-far: 0 24px 48px rgba(15, 18, 37, 0.06);
+  --shadow-inset-highlight: inset 0 1px 1px rgba(255, 255, 255, 0.6);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg-grad-1: #eef0fb;
+    --bg-grad-2: #f7f8fd;
+    --surface: rgba(15, 18, 37, 0.04);
+    --surface-strong: rgba(15, 18, 37, 0.07);
+    --border-soft: rgba(15, 18, 37, 0.1);
+    --text-primary: #12142b;
+    --text-secondary: rgba(18, 20, 43, 0.68);
+    --text-muted: rgba(18, 20, 43, 0.48);
+
+    --shadow-ambient: 0 8px 24px rgba(15, 18, 37, 0.08);
+    --shadow-far: 0 24px 48px rgba(15, 18, 37, 0.06);
+    --shadow-inset-highlight: inset 0 1px 1px rgba(255, 255, 255, 0.6);
+  }
+}

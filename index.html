@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>MedTracker &mdash; Sign in</title>
+  <meta name="description" content="Sign in to MedTracker, a private family medication tracker." />
+  <meta name="theme-color" content="#0f1225" />
+
+  <link rel="icon" type="image/svg+xml" href="icons/favicon.svg" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="manifest" href="manifest.json" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="css/tokens.css" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <link rel="stylesheet" href="css/pages/login.css" />
+</head>
+<body>
+  <div class="login-screen">
+    <div class="glass-card tilt-card login-card">
+      <div class="brand">
+        <img src="icons/icon-192.png" alt="" width="40" height="40" />
+        <span class="brand-name">MedTracker</span>
+      </div>
+      <h1>Welcome back</h1>
+      <p class="subtitle">Sign in to manage medications, doses, and inventory.</p>
+
+      <form id="login-form" class="login-form">
+        <p id="login-status" class="login-status" role="alert"></p>
+        <div class="field">
+          <label for="email">Email</label>
+          <input id="email" type="email" autocomplete="username" required />
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input id="password" type="password" autocomplete="current-password" required />
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;" id="login-submit">Sign in</button>
+      </form>
+
+      <p class="login-footnote">
+        Access is by invitation only. Contact your administrator if you need an account.
+      </p>
+    </div>
+  </div>
+
+  <script type="module">
+    import { login, watchAuthState } from './js/auth.js';
+    import { initTilt } from './js/tilt.js';
+
+    initTilt();
+
+    const form = document.getElementById('login-form');
+    const status = document.getElementById('login-status');
+    const submitBtn = document.getElementById('login-submit');
+
+    watchAuthState(
+      () => { window.location.replace('app.html'); },
+      () => {}
+    );
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      status.textContent = '';
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Signing in...';
+
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+
+      try {
+        await login(email, password);
+        window.location.replace('app.html');
+      } catch (err) {
+        console.error(err);
+        if (err.message?.includes('Firebase is not configured')) {
+          status.textContent = err.message;
+        } else if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
+          status.textContent = 'Incorrect email or password.';
+        } else if (err.code === 'auth/too-many-requests') {
+          status.textContent = 'Too many attempts. Please wait and try again.';
+        } else {
+          status.textContent = 'Could not sign in. Please try again.';
+        }
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Sign in';
+      }
+    });
+  </script>
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('service-worker.js');
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,50 @@
+.inventory-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+}
+
+.inventory-card {
+  padding: var(--space-4);
+}
+
+.inventory-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+
+.inventory-card-top .med-name {
+  font-weight: 700;
+}
+
+.inventory-card-top .days-left {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+}
+
+.inventory-card-top .days-left.is-low {
+  color: var(--status-missed);
+  font-weight: 700;
+}
+
+.inventory-count-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+  margin-top: var(--space-2);
+}
+
+.inventory-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-3);
+}
+
+@media (min-width: 900px) {
+  .inventory-list {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

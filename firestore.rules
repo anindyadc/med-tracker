@@ -1,0 +1,42 @@
+rules_version = '2';
+
+// MedTracker Firestore Security Rules
+//
+// This is the actual security boundary for the app (the Firebase web config in
+// js/firebase-config.js is not a secret - see CLAUDE.md). Access is gated by an
+// "allowlist" collection keyed by Firebase Auth UID: a caregiver can only read/write
+// data once their UID exists as a doc there, and that doc is managed exclusively via
+// the Firebase console (never from the client - there is no public sign-up).
+//
+// Paste this file's contents into: Firebase Console -> Firestore Database -> Rules.
+// If you use the Firebase CLI instead, `firebase deploy --only firestore:rules` will
+// deploy this file directly (see firebase.json).
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAllowed() {
+      return request.auth != null &&
+        exists(/databases/$(database)/documents/allowlist/$(request.auth.uid));
+    }
+
+    // Existence of a doc here (by UID) is the access grant. Never readable/writable
+    // from the client - manage it only via the Firebase console.
+    match /allowlist/{uid} {
+      allow read, write: if false;
+    }
+
+    match /medications/{medicationId} {
+      allow read, write: if isAllowed();
+    }
+
+    match /doseLogs/{doseLogId} {
+      allow read, write: if isAllowed();
+    }
+
+    // Caregivers can only read/write their own settings document.
+    match /settings/{uid} {
+      allow read, write: if isAllowed() && request.auth.uid == uid;
+    }
+  }
+}
