@@ -46,3 +46,4 @@ Then open `http://localhost:8000/index.html`.
   backend (see CLAUDE.md's "Reminders" section for the Phase 2 option).
 - **No password reset UI** — an admin resets a caregiver's password via the Firebase console.
 - **No public sign-up** — this is intentional; it's a closed, invite-only app.
+# med-tracker
