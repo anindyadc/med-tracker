@@ -36,12 +36,12 @@ const {
 // URL does. The actual security boundary is Firestore Security Rules + the allowlist
 // collection (see CLAUDE.md). Fill these in from Firebase Console -> Project settings -> Web app.
 const firebaseConfig = {
-  apiKey: 'REPLACE_WITH_YOUR_API_KEY',
-  authDomain: 'REPLACE_WITH_YOUR_PROJECT.firebaseapp.com',
-  projectId: 'REPLACE_WITH_YOUR_PROJECT_ID',
-  storageBucket: 'REPLACE_WITH_YOUR_PROJECT.appspot.com',
-  messagingSenderId: 'REPLACE_WITH_YOUR_SENDER_ID',
-  appId: 'REPLACE_WITH_YOUR_APP_ID'
+  apiKey: 'AIzaSyAlrJ0DlgQRSKlBeqZkhVF59F5QT4ga884',
+  authDomain: 'med-tracker-19b39.firebaseapp.com',
+  projectId: 'med-tracker-19b39',
+  storageBucket: 'med-tracker-19b39.firebasestorage.app',
+  messagingSenderId: '413661836147',
+  appId: '1:413661836147:web:c4b9f9e3ac66df5b884b06'
 };
 
 export const isFirebaseConfigured = () =>
