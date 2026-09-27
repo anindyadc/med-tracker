@@ -35,7 +35,7 @@ async function notifyDue(occurrence) {
   registration.active?.postMessage({
     type: 'SHOW_DUE_NOTIFICATION',
     payload: {
-      title: `${occurrence.medicationName} is due`,
+      title: `Time for ${occurrence.medicationName}`,
       body: `Scheduled for ${occurrence.scheduledTime}${occurrence.label ? ` (${occurrence.label})` : ''}`,
       tag: key,
       medicationId: occurrence.medicationId,
@@ -70,13 +70,4 @@ export function startDueDoseWatcher(getDueDoses) {
 export function stopDueDoseWatcher() {
   if (intervalHandle) clearInterval(intervalHandle);
   intervalHandle = null;
-}
-
-export function onNotificationAction(handler) {
-  if (!('serviceWorker' in navigator)) return;
-  navigator.serviceWorker.addEventListener('message', (event) => {
-    if (event.data?.type === 'NOTIFICATION_ACTION') {
-      handler(event.data.action, event.data.data);
-    }
-  });
 }

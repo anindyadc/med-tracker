@@ -6,7 +6,7 @@ Guidance for Claude Code (or any future contributor) working in this repository.
 
 **MedTracker** — a private, family-use web app for managing one person's (the maintainer's mother's)
 medication care: inventory of pills/doses on hand, prescription details, multi-times-per-day dosage
-schedules, due-dose reminders, and reconciliation of missed doses against inventory. Built for a small
+schedules, dose reminders, and stock that is automatically drawn down as doses are assumed taken daily. Built for a small
 number of family caregivers, not the general public.
 
 Hosted as a static site on **GitHub Pages**. There is no application server or build step — everything
@@ -52,10 +52,10 @@ js/
   auth.js             sign-in/out, onAuthStateChanged guard, permission-denied -> forced sign-out
   router.js           hash-based view switcher
   db.js               Firestore CRUD wrappers
-  scheduler.js        due/upcoming/missed computation + taken/skip/missed transactions (core domain logic)
-  inventory.js        inventory decrement/increment, low-stock / days-remaining calc
+  scheduler.js        today's dose occurrences (upcoming / assumed-taken / due-now reminder window)
+  inventory.js        derived stock: remaining = baseline − scheduled doses since, low-stock / days-remaining (core domain logic)
   notifications.js    Notification permission + interval-based due-dose checks
-  date-utils.js       local date-key + grace-period helpers
+  date-utils.js       local date-key / time formatting helpers
   tilt.js             pointer/touch 3D tilt effect for .tilt-card elements
   ui/*.js             one renderer per view, wired to router.js
 
@@ -79,41 +79,46 @@ licensing-clarity reason.
 - **`medications/{id}`** —
   `name, strength, form, doctor, instructions, prescriptionNumber, pharmacy, refillReminderThreshold` (days),
   `schedule: [{time, quantity, label}, ...]` (embedded array — always read/written with the medication,
-  never queried independently), `inventory: {count, unit, lastRestockDate, lastRestockAmount}`,
+  never queried independently), `inventory: {count, countedAt, unit, lastRestockDate, lastRestockAmount}`
+  (`count` is the quantity as of `countedAt`, *not* current stock — see "Stock model"),
   (`lastRestockDate` = purchase/stock-in date: a Timestamp at local midnight of the day the caregiver
   picks; older docs may hold the server time of the restock — read it via `dateKeyFromStored`),
   `active`, timestamps.
-- **`doseLogs/{medicationId_scheduledDate_scheduledTime}`** — one doc per scheduled dose *occurrence*.
-  The ID is deterministic so recomputing the schedule repeatedly is idempotent (never creates duplicates).
-  `medicationId, medicationName` (denormalized for fast history rendering), `scheduledDate` (local
-  `YYYY-MM-DD` string, not a Timestamp — avoids timezone ambiguity about which day a dose belongs to),
-  `scheduledTime`, `scheduledDateTime` (Timestamp, for sorting/grace math), `quantity` (copied at
-  creation so later schedule edits don't rewrite history), `status: "taken"|"missed"|"skipped"`,
-  `loggedAt`, `loggedBy`, `note`.
-- **`settings/{uid}`** — per-caregiver `gracePeriodMinutes, notificationsEnabled, theme`.
+- **`doseLogs`** — *legacy, no longer read or written.* The old Mark Taken model logged one doc per dose;
+  existing docs are harmless and can be deleted from the console. The rules still allow it.
+- **`settings/{uid}`** — per-caregiver `notificationsEnabled, theme` (older docs may also carry an unused
+  `gracePeriodMinutes`).
 
-### Missed-dose ↔ inventory algorithm (the core logic — lives in `js/scheduler.js`)
+### Stock model (the core logic — `js/inventory.js`, writes in `js/db.js`)
 
-Re-run on app load, on `visibilitychange`, and on a ~60s interval while the app is open:
+There is **no per-dose logging** — no Mark Taken / Skip / Undo, and no missed doses. Every scheduled
+dose of an active medication is **assumed taken at its scheduled time**, and stock is **derived**:
 
-1. For each active medication's schedule entry, compute today's `scheduledDateTime` (local time).
-2. If a `doseLogs` doc already exists for that occurrence, trust its stored status — never overwritten.
-3. No doc yet + `now < scheduledDateTime` → virtual **"upcoming"** (nothing written to Firestore).
-4. No doc yet + within the grace window → virtual **"due"** (shown prominently, eligible for a
-   notification; still nothing written — avoids polluting Firestore with docs that flip a minute later).
-5. No doc yet + grace period elapsed → **write `status: "missed"`**. This is the *only* trigger for the
-   due→missed transition. **Inventory is left untouched.**
-6. **"Mark Taken"** → write/overwrite the doc as `status: "taken"`, and in the *same Firestore
-   transaction* decrement `medications.inventory.count` by `quantity` (clamp at 0). This is the *only*
-   trigger for an inventory decrement — never on "missed".
-7. **"Skip"** → `status: "skipped"`, no inventory change (distinguishes a doctor-directed skip from a
-   forgotten dose in history).
-8. **Undo** (correcting a mis-tap) reverses the same transaction — status reverts, inventory increments
-   back. Must be a confirm-guarded UI action, not a casual toggle.
-9. **Manual restock** (Inventory view) adjusts `inventory.count` / `lastRestockDate` directly,
-   independent of dose logging. The caregiver picks the purchase/stock-in date (defaults to today,
-   no future dates); the Add/Edit medication form sets the same field. Setting a date never changes
-   `count` on its own.
+1. Each medication stores a baseline: `inventory.count` = quantity on hand as of the instant
+   `inventory.countedAt`.
+2. `remainingAt(med, now)` = `count` − the `quantity` of every schedule entry whose occurrence falls
+   in `(countedAt, now]` (local time), clamped at 0. Nothing is written as time passes — the Today,
+   Stock, Meds and History views all compute from the same function, so they can't drift.
+3. **Stock-in date → instant** (`stockInInstant`): today = *now* (doses already passed today came out
+   of the old stock); a past date = that day's local midnight (all its doses count against the new
+   stock). No future dates.
+4. **Restock** (Inventory view): new `count` = `remainingAt(stock-in instant) + added`, `countedAt` =
+   that instant (never earlier than the current baseline, which would double-subtract). Also sets
+   `lastRestockDate` / `lastRestockAmount` (shown as "Stocked in …" on the Stock card).
+5. **Add/Edit medication**: "Quantity on stock-in date" + "Purchase / stock-in date" edit the baseline
+   directly. If they're left untouched on edit, the save **rebases** (`count` = derived remaining now,
+   `countedAt` = now) so a schedule change only affects consumption from that moment on.
+6. **Deactivate/Reactivate** rebases the same way; inactive medications don't consume.
+7. **Legacy docs** (from the old Mark Taken model) have no `countedAt`; their `count` was kept current
+   until their last write, so `baselineAt` falls back to `updatedAt`. The first rebase adds `countedAt`.
+
+Any write that touches `count`, `schedule` or `active` must also set `countedAt` (go through
+`updateMedication` / `setMedicationActive` / `restockMedication` in `db.js`, which do this in a
+transaction).
+
+The Today view shows today's doses as "upcoming" or "taken" (passed), with a "due now" badge for
+`DUE_WINDOW_MINUTES` (30) after each dose time — that window is also what triggers reminders. History is
+derived the same way (last 21 days, from when each medication was added, using its *current* schedule).
 
 ## Security rules (Firestore)
 
@@ -138,7 +143,7 @@ explicitly a future/Phase-2 option, not part of this build.
 
 **Current (MVP) behavior**: request `Notification.requestPermission()` from an explicit button in
 Settings (never auto-prompt on load), then fire local notifications via the service worker's
-`showNotification` (supports action buttons) for doses that just became due, checked on load,
+`showNotification` (no action buttons — tapping opens the app) for doses that just became due, checked on load,
 `visibilitychange`, and a ~30–60s interval while the tab/installed PWA is open. iOS Safari's PWA
 notification support is more limited/version-gated — that's a platform constraint, not a bug here.
 
@@ -157,7 +162,7 @@ notification support is more limited/version-gated — that's a platform constra
   the glass cards so `backdrop-filter` has real color variation to pick up.
 - Mobile-first responsive: bottom glassmorphic tab bar on phones, single `@media (min-width: 900px)`
   breakpoint switches to a left sidebar + multi-column grid on laptop. Keep it to these two layouts —
-  don't add more breakpoints than this personal app needs. Primary actions ("Mark Taken") ≥44×44px,
+  don't add more breakpoints than this personal app needs. Primary actions (e.g. "Restock") ≥44×44px,
   reachable one-handed.
 - The sidebar's Log out item is desktop-only (`.nav-logout`); on phones Log out lives in Settings.
 - Medications view has a Cards/List toggle; the choice is a per-device UI preference in `localStorage`
@@ -193,6 +198,7 @@ via the Firebase console.
 - Don't try to make reminders fire when the app is fully closed without first adding a real backend
   (see "Reminders" above) — that's a known, accepted limitation, not an oversight.
 - Don't introduce a bundler/build step without also updating `.github/workflows/deploy.yml`.
-- Don't decrement inventory anywhere except the "Mark Taken" transaction in `scheduler.js` — that
-  invariant is what keeps inventory and dose history consistent.
+- Don't store "current stock" or decrement `inventory.count` as time passes — stock is derived from the
+  baseline (`count` + `countedAt`) and the schedule. Any write that changes `count`, `schedule` or
+  `active` must rebase `countedAt` (see "Stock model").
 - Don't use `latest` for the Firebase CDN import URLs — pin an exact version.

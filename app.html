@@ -77,18 +77,14 @@
   <p id="toast" class="toast" hidden></p>
 
   <script type="module">
-    import { watchAuthState, onAccessDenied, logout } from './js/auth.js';
+    import { watchAuthState, onAccessDenied, logout, currentUser } from './js/auth.js';
     import { registerView, navigate, startRouter, onViewChange } from './js/router.js';
     import { renderDashboard, getDueOccurrencesForNotifications } from './js/ui/dashboard.js';
     import { renderMedications } from './js/ui/medications.js';
     import { renderInventory } from './js/ui/inventory-view.js';
     import { renderHistory } from './js/ui/history.js';
     import { renderSettings } from './js/ui/settings.js';
-    import { startDueDoseWatcher, onNotificationAction } from './js/notifications.js';
-    import { markDoseTaken, getMedication } from './js/db.js';
-    import { showToast } from './js/ui/shared.js';
-    import { currentUser } from './js/auth.js';
-    import { scheduledDateTime } from './js/date-utils.js';
+    import { startDueDoseWatcher } from './js/notifications.js';
 
     const shell = document.getElementById('app-shell');
     const loading = document.getElementById('auth-loading');
@@ -136,27 +132,6 @@
       }
     );
 
-    onNotificationAction(async (action, data) => {
-      if (action === 'mark-taken' && data?.medicationId) {
-        try {
-          const med = await getMedication(data.medicationId);
-          const entry = med?.schedule?.find((s) => s.time === data.scheduledTime);
-          await markDoseTaken({
-            medicationId: data.medicationId,
-            medicationName: med?.name || '',
-            scheduledDate: data.scheduledDate,
-            scheduledTime: data.scheduledTime,
-            scheduledDateTime: scheduledDateTime(data.scheduledDate, data.scheduledTime),
-            quantity: entry?.quantity ?? 1,
-            uid: currentUser()?.uid
-          });
-        } catch (err) {
-          console.warn('Could not mark dose taken from notification action:', err);
-        } finally {
-          renderDashboard();
-        }
-      }
-    });
   </script>
 
   <script>

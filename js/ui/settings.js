@@ -17,7 +17,7 @@ export async function renderSettings() {
   if (!root) return;
 
   const uid = currentUser()?.uid;
-  const settings = uid ? await getUserSettings(uid) : { theme: 'dark', gracePeriodMinutes: 60, notificationsEnabled: false };
+  const settings = uid ? await getUserSettings(uid) : { theme: 'dark', notificationsEnabled: false };
   applyTheme(settings.theme);
 
   const permission = notificationPermission();
@@ -50,13 +50,6 @@ export async function renderSettings() {
         <button class="btn btn-secondary btn-sm" id="req-notif" ${permission === 'granted' || !notificationsSupported() ? 'disabled' : ''}>
           ${permission === 'granted' ? 'Enabled' : 'Enable'}
         </button>
-      </div>
-      <div class="settings-row">
-        <div class="settings-row-label">
-          <span>Grace period</span>
-          <span class="hint">Minutes after a due time before it's marked missed</span>
-        </div>
-        <input id="grace-input" type="number" min="5" max="240" step="5" value="${settings.gracePeriodMinutes}" style="width:80px; min-height:36px; background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--radius-sm); color:var(--text-primary); padding:0 var(--space-2);" />
       </div>
       <p class="about-text" style="margin-top: var(--space-3);">
         Reminders only fire while MedTracker is open in a browser tab or installed as an app on this
@@ -91,14 +84,6 @@ export async function renderSettings() {
     const result = await requestNotificationPermission();
     if (result === 'granted' && uid) await saveUserSettings(uid, { notificationsEnabled: true });
     renderSettings();
-  });
-
-  root.querySelector('#grace-input')?.addEventListener('change', async (e) => {
-    const minutes = Math.max(5, Number(e.target.value) || 60);
-    if (uid) {
-      await saveUserSettings(uid, { gracePeriodMinutes: minutes });
-      showToast('Grace period updated');
-    }
   });
 
   root.querySelector('#logout-btn')?.addEventListener('click', async () => {

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'medtracker-v6';
+const CACHE_NAME = 'medtracker-v7';
 
 const APP_SHELL = [
   './',
@@ -74,8 +74,8 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// Lets page code trigger a local notification with action buttons via the SW,
-// which is required for notification actions to work (plain `new Notification()` can't have actions).
+// Lets page code show a local notification via the SW (works in installed PWAs, where
+// `new Notification()` is unavailable). Tapping it focuses/opens the app.
 self.addEventListener('message', (event) => {
   const { type, payload } = event.data || {};
   if (type === 'SHOW_DUE_NOTIFICATION') {
@@ -86,11 +86,7 @@ self.addEventListener('message', (event) => {
         tag,
         icon: './icons/icon-192.png',
         badge: './icons/icon-192.png',
-        data: { medicationId, scheduledDate, scheduledTime },
-        actions: [
-          { action: 'mark-taken', title: 'Mark Taken' },
-          { action: 'dismiss', title: 'Dismiss' }
-        ]
+        data: { medicationId, scheduledDate, scheduledTime }
       })
     );
   }
@@ -98,15 +94,12 @@ self.addEventListener('message', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  if (event.action === 'dismiss') return;
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
-      const data = event.notification.data || {};
       const targetUrl = new URL('./app.html#dashboard', self.location.href).href;
       for (const client of clients) {
         if (client.url.includes('app.html')) {
-          client.postMessage({ type: 'NOTIFICATION_ACTION', action: event.action, data });
           return client.focus();
         }
       }

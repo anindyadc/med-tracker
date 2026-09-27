@@ -134,6 +134,11 @@
   box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.18);
 }
 
+.field .hint {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+}
+
 .field select option {
   background: var(--input-bg);
   color: var(--text-primary);

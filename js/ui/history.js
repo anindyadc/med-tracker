@@ -1,47 +1,57 @@
-import { listRecentDoseLogs, listMedications } from '../db.js';
-import { formatDateLong, formatTime } from '../date-utils.js';
+import { listMedications } from '../db.js';
+import { occurrencesForDate } from '../scheduler.js';
+import { baselineAt } from '../inventory.js';
+import { dateKey, addDays, formatDateLong, formatTime } from '../date-utils.js';
 import { escapeHtml } from './shared.js';
+
+// History is derived, not logged: every scheduled dose that has passed is assumed taken, from
+// the day the medication was added. It reflects each medication's *current* schedule.
+const HISTORY_DAYS = 21;
 
 let medicationFilter = 'all';
 
-function rowHtml(log) {
+function rowHtml(occ) {
   return `
     <div class="glass-card history-row">
       <div class="history-row-info">
-        <span class="med-name">${escapeHtml(log.medicationName)}</span>
-        ${log.note ? `<span class="note">${escapeHtml(log.note)}</span>` : ''}
+        <span class="med-name">${escapeHtml(occ.medicationName)}</span>
+        <span class="note">${occ.quantity}${occ.label ? ' &middot; ' + escapeHtml(occ.label) : ''}</span>
       </div>
-      <div class="history-row-time">${formatTime(log.scheduledTime)}</div>
-      <span class="badge badge-${log.status}">${log.status}</span>
+      <div class="history-row-time">${formatTime(occ.scheduledTime)}</div>
+      <span class="badge badge-taken">taken</span>
     </div>
   `;
+}
+
+function startOf(med) {
+  const created = typeof med.createdAt?.toDate === 'function' ? med.createdAt.toDate() : null;
+  return created || baselineAt(med);
 }
 
 export async function renderHistory() {
   const root = document.getElementById('history-content');
   if (!root) return;
 
-  const [logs, medications] = await Promise.all([
-    listRecentDoseLogs({ days: 21 }),
-    listMedications({ includeInactive: true })
-  ]);
+  const medications = await listMedications({ includeInactive: true });
+  const tracked = medications.filter((m) => medicationFilter === 'all' || m.id === medicationFilter);
+  const now = new Date();
 
-  const filtered = medicationFilter === 'all' ? logs : logs.filter((l) => l.medicationId === medicationFilter);
-
-  const byDate = new Map();
-  for (const log of filtered) {
-    if (!byDate.has(log.scheduledDate)) byDate.set(log.scheduledDate, []);
-    byDate.get(log.scheduledDate).push(log);
+  const groups = [];
+  for (let i = 0; i < HISTORY_DAYS; i++) {
+    const day = addDays(dateKey(now), -i);
+    const entries = occurrencesForDate(tracked, day, now)
+      .filter((o) => o.status === 'taken')
+      .filter((o) => o.scheduledDateTime >= startOf(tracked.find((m) => m.id === o.medicationId)))
+      .reverse();
+    if (entries.length > 0) groups.push({ day, entries });
   }
 
-  const groupsHtml = [...byDate.entries()]
-    .sort((a, b) => (a[0] < b[0] ? 1 : -1))
-    .map(([date, entries]) => `
-      <div class="history-day-group">
-        <h3>${formatDateLong(date)}</h3>
-        ${entries.map(rowHtml).join('')}
-      </div>
-    `).join('');
+  const groupsHtml = groups.map(({ day, entries }) => `
+    <div class="history-day-group">
+      <h3>${formatDateLong(day)}</h3>
+      ${entries.map(rowHtml).join('')}
+    </div>
+  `).join('');
 
   root.innerHTML = `
     <div class="page-header"><h1>History</h1></div>
@@ -54,8 +64,8 @@ export async function renderHistory() {
         </select>
       </div>
     </div>
-    ${filtered.length === 0
-      ? `<div class="empty-state"><p>No dose history yet.</p></div>`
+    ${groups.length === 0
+      ? `<div class="empty-state"><p>No doses yet.</p></div>`
       : groupsHtml}
   `;
 

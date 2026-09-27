@@ -5,20 +5,16 @@ import {
   getDoc,
   getDocs,
   setDoc,
-  updateDoc,
   deleteDoc,
-  query,
-  where,
-  orderBy,
   runTransaction,
   serverTimestamp,
   Timestamp
 } from './firebase-config.js';
 import { reportPossibleAccessDenied } from './auth.js';
 import { scheduledDateTime } from './date-utils.js';
+import { remainingAt, baselineAt, stockInInstant } from './inventory.js';
 
 const MEDICATIONS = 'medications';
-const DOSE_LOGS = 'doseLogs';
 const SETTINGS = 'settings';
 
 function wrap(promise) {
@@ -41,6 +37,10 @@ export async function getMedication(id) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
+// Stock model (see CLAUDE.md): `inventory.count` is the quantity on hand as of
+// `inventory.countedAt`; remaining stock is derived from the schedule in inventory.js. Every
+// write that changes the count, schedule, or active flag rebases so past consumption is kept.
+
 // `dateStr` is a local YYYY-MM-DD from a date input; stored as local midnight. Falls back to now.
 export function restockTimestamp(dateStr) {
   return dateStr ? Timestamp.fromDate(scheduledDateTime(dateStr, '00:00')) : serverTimestamp();
@@ -48,6 +48,7 @@ export function restockTimestamp(dateStr) {
 
 export async function createMedication(data, uid) {
   const ref = doc(collection(db, MEDICATIONS));
+  const count = Number(data.inventory?.count) || 0;
   const payload = {
     name: data.name,
     strength: data.strength || '',
@@ -59,10 +60,11 @@ export async function createMedication(data, uid) {
     refillReminderThreshold: Number(data.refillReminderThreshold) || 7,
     schedule: data.schedule || [],
     inventory: {
-      count: Number(data.inventory?.count) || 0,
+      count,
+      countedAt: Timestamp.fromDate(stockInInstant(data.inventory?.lastRestockDate)),
       unit: data.inventory?.unit || 'pill',
       lastRestockDate: restockTimestamp(data.inventory?.lastRestockDate),
-      lastRestockAmount: Number(data.inventory?.count) || 0
+      lastRestockAmount: count
     },
     active: true,
     createdAt: serverTimestamp(),
@@ -73,12 +75,47 @@ export async function createMedication(data, uid) {
   return ref.id;
 }
 
-export async function updateMedication(id, data) {
-  await wrap(updateDoc(doc(db, MEDICATIONS, id), { ...data, updatedAt: serverTimestamp() }));
+// `stock` (optional) = { count, date } entered by the caregiver: "`count` on hand as of `date`".
+// Without it, the stock is rebased to what's derived right now, so a schedule change only
+// affects consumption from this moment on.
+export async function updateMedication(id, data, stock = null) {
+  const ref = doc(db, MEDICATIONS, id);
+  await wrap(
+    runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) throw new Error('Medication not found');
+      const current = snap.data();
+      const now = new Date();
+      const inventory = { ...current.inventory, ...(data.inventory || {}) };
+      if (stock) {
+        inventory.count = Number(stock.count) || 0;
+        inventory.countedAt = Timestamp.fromDate(stockInInstant(stock.date, now));
+        inventory.lastRestockDate = restockTimestamp(stock.date);
+      } else {
+        inventory.count = remainingAt(current, now);
+        inventory.countedAt = Timestamp.fromDate(now);
+      }
+      tx.update(ref, { ...data, inventory, updatedAt: serverTimestamp() });
+    })
+  );
 }
 
 export async function setMedicationActive(id, active) {
-  await wrap(updateDoc(doc(db, MEDICATIONS, id), { active, updatedAt: serverTimestamp() }));
+  const ref = doc(db, MEDICATIONS, id);
+  await wrap(
+    runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) throw new Error('Medication not found');
+      const now = new Date();
+      // Freeze (or resume) consumption at this moment.
+      tx.update(ref, {
+        active,
+        'inventory.count': remainingAt(snap.data(), now),
+        'inventory.countedAt': Timestamp.fromDate(now),
+        updatedAt: serverTimestamp()
+      });
+    })
+  );
 }
 
 export async function deleteMedication(id) {
@@ -91,9 +128,15 @@ export async function restockMedication(id, addedAmount, restockDate) {
       const ref = doc(db, MEDICATIONS, id);
       const snap = await tx.get(ref);
       if (!snap.exists()) throw new Error('Medication not found');
-      const current = snap.data().inventory?.count || 0;
+      const med = snap.data();
+      // New baseline at the stock-in instant, but never before the current baseline - moving it
+      // earlier would subtract doses that the current count already accounts for.
+      const picked = stockInInstant(restockDate);
+      const base = baselineAt(med);
+      const at = picked > base ? picked : base;
       tx.update(ref, {
-        'inventory.count': current + Number(addedAmount),
+        'inventory.count': remainingAt(med, at) + Number(addedAmount),
+        'inventory.countedAt': Timestamp.fromDate(at),
         'inventory.lastRestockDate': restockTimestamp(restockDate),
         'inventory.lastRestockAmount': Number(addedAmount),
         updatedAt: serverTimestamp()
@@ -102,127 +145,9 @@ export async function restockMedication(id, addedAmount, restockDate) {
   );
 }
 
-// ---------- Dose logs ----------
-
-function doseLogId(medicationId, scheduledDate, scheduledTime) {
-  return `${medicationId}_${scheduledDate}_${scheduledTime}`;
-}
-
-export async function listDoseLogsForDate(scheduledDate) {
-  const q = query(collection(db, DOSE_LOGS), where('scheduledDate', '==', scheduledDate));
-  const snap = await wrap(getDocs(q));
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-}
-
-export async function listRecentDoseLogs({ days = 14 } = {}) {
-  const q = query(collection(db, DOSE_LOGS), orderBy('scheduledDateTime', 'desc'));
-  const snap = await wrap(getDocs(q));
-  const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-  return days ? all.slice(0, days * 20) : all;
-}
-
-// Writes a "missed" record. Idempotent by construction: doseLogId is deterministic, so if a
-// doc already exists (e.g. a concurrent reconciliation pass, or the user already acted) we
-// simply overwrite it with the same terminal state rather than risk clobbering a real action -
-// callers in scheduler.js only ever call this when they've already confirmed no doc exists.
-export async function recordMissedDose({ medicationId, medicationName, scheduledDate, scheduledTime, scheduledDateTime: when, quantity }) {
-  const ref = doc(db, DOSE_LOGS, doseLogId(medicationId, scheduledDate, scheduledTime));
-  await wrap(
-    setDoc(ref, {
-      medicationId,
-      medicationName,
-      scheduledDate,
-      scheduledTime,
-      scheduledDateTime: Timestamp.fromDate(when),
-      quantity,
-      status: 'missed',
-      loggedAt: null,
-      loggedBy: null,
-      note: ''
-    })
-  );
-}
-
-// The one and only place inventory is decremented: marking a dose "taken" atomically writes
-// the log and decrements inventory in a single Firestore transaction (see CLAUDE.md).
-export async function markDoseTaken({ medicationId, medicationName, scheduledDate, scheduledTime, scheduledDateTime: when, quantity, uid, note = '' }) {
-  const logRef = doc(db, DOSE_LOGS, doseLogId(medicationId, scheduledDate, scheduledTime));
-  const medRef = doc(db, MEDICATIONS, medicationId);
-
-  await wrap(
-    runTransaction(db, async (tx) => {
-      const medSnap = await tx.get(medRef);
-      const currentCount = medSnap.exists() ? medSnap.data().inventory?.count || 0 : 0;
-      const nextCount = Math.max(0, currentCount - quantity);
-
-      tx.set(logRef, {
-        medicationId,
-        medicationName,
-        scheduledDate,
-        scheduledTime,
-        scheduledDateTime: Timestamp.fromDate(when),
-        quantity,
-        status: 'taken',
-        loggedAt: serverTimestamp(),
-        loggedBy: uid,
-        note
-      });
-
-      if (medSnap.exists()) {
-        tx.update(medRef, { 'inventory.count': nextCount, updatedAt: serverTimestamp() });
-      }
-    })
-  );
-}
-
-export async function markDoseSkipped({ medicationId, medicationName, scheduledDate, scheduledTime, scheduledDateTime: when, quantity, uid, note = '' }) {
-  const ref = doc(db, DOSE_LOGS, doseLogId(medicationId, scheduledDate, scheduledTime));
-  await wrap(
-    setDoc(ref, {
-      medicationId,
-      medicationName,
-      scheduledDate,
-      scheduledTime,
-      scheduledDateTime: Timestamp.fromDate(when),
-      quantity,
-      status: 'skipped',
-      loggedAt: serverTimestamp(),
-      loggedBy: uid,
-      note
-    })
-  );
-}
-
-// Undo a "taken" mark: reverts the log to "missed" (or deletes it if still inside the grace
-// window, letting reconciliation recompute it as due/upcoming) and gives the inventory back.
-export async function undoDoseTaken({ medicationId, scheduledDate, scheduledTime, wasWithinGraceWindow }) {
-  const logRef = doc(db, DOSE_LOGS, doseLogId(medicationId, scheduledDate, scheduledTime));
-  const medRef = doc(db, MEDICATIONS, medicationId);
-
-  await wrap(
-    runTransaction(db, async (tx) => {
-      const logSnap = await tx.get(logRef);
-      if (!logSnap.exists() || logSnap.data().status !== 'taken') return;
-      const quantity = logSnap.data().quantity || 0;
-
-      const medSnap = await tx.get(medRef);
-      if (medSnap.exists()) {
-        const currentCount = medSnap.data().inventory?.count || 0;
-        tx.update(medRef, { 'inventory.count': currentCount + quantity, updatedAt: serverTimestamp() });
-      }
-
-      if (wasWithinGraceWindow) {
-        tx.delete(logRef);
-      } else {
-        tx.update(logRef, { status: 'missed', loggedAt: null, loggedBy: null });
-      }
-    })
-  );
-}
-
 // ---------- Settings ----------
 
-const DEFAULT_SETTINGS = { gracePeriodMinutes: 60, notificationsEnabled: false, theme: 'dark' };
+const DEFAULT_SETTINGS = { notificationsEnabled: false, theme: 'dark' };
 
 export async function getUserSettings(uid) {
   const snap = await wrap(getDoc(doc(db, SETTINGS, uid)));

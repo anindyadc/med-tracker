@@ -1,5 +1,5 @@
 import { listMedications, restockMedication } from '../db.js';
-import { daysRemaining, dailyUsage, stockFraction, isLowStock } from '../inventory.js';
+import { daysRemaining, dailyUsage, stockFraction, isLowStock, remainingAt } from '../inventory.js';
 import { initTilt } from '../tilt.js';
 import { escapeHtml, showToast, openModal, closeModal } from './shared.js';
 import { dateKey, dateKeyFromStored, formatDateShort } from '../date-utils.js';
@@ -23,7 +23,7 @@ function inventoryCardHtml(med) {
       </div>
       <div class="stock-bar"><div class="stock-bar-fill ${low ? 'is-low' : ''}" style="width:${Math.round(fraction * 100)}%"></div></div>
       <div class="inventory-count-row">
-        <span>${med.inventory?.count ?? 0} ${escapeHtml(med.inventory?.unit || 'pill')}s on hand</span>
+        <span>${remainingAt(med)} ${escapeHtml(med.inventory?.unit || 'pill')}s on hand</span>
         <span>${dailyUsage(med)} / day</span>
       </div>
       ${stockedInText(med) ? `<div class="inventory-stocked-in">${escapeHtml(stockedInText(med))}</div>` : ''}
@@ -37,7 +37,7 @@ function inventoryCardHtml(med) {
 function restockFormHtml(med) {
   return `
     <h2>Restock ${escapeHtml(med.name)}</h2>
-    <p class="about-text" style="margin-bottom: var(--space-4);">Currently ${med.inventory?.count ?? 0} ${escapeHtml(med.inventory?.unit || 'pill')}s on hand.</p>
+    <p class="about-text" style="margin-bottom: var(--space-4);">Currently ${remainingAt(med)} ${escapeHtml(med.inventory?.unit || 'pill')}s on hand.</p>
     <form id="restock-form">
       <div class="field">
         <label for="r-amount">Amount added</label>

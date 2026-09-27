@@ -1,26 +1,28 @@
 # MedTracker
 
 A private, family-use web app for tracking medication inventory, prescriptions, multi-times-per-day
-dosage schedules, and missed doses — built to be hosted for free on GitHub Pages.
+dosage schedules, and stock that counts down automatically — built to be hosted for free on GitHub Pages.
 
 See **[CLAUDE.md](./CLAUDE.md)** for the full architecture, data model, and design system reference.
 
 ## Status
 
-The app is fully built (UI, routing, Firestore-backed data layer, dose scheduling/missed-dose logic,
+The app is fully built (UI, routing, Firestore-backed data layer, dose scheduling and derived stock,
 PWA install support). Sign-in only works once the one-time Firebase setup below is complete —
 in particular, every caregiver needs an `allowlist` entry (step 5), or they'll be signed straight
 back out with a "not authorized" message.
 
 ## Features
 
-- **Today** — due, upcoming, taken and missed doses, with Mark Taken / Skip / Undo.
+- **Today** — today's doses: upcoming, and taken (every dose is assumed taken at its scheduled time —
+  there's nothing to tick off), with a "due now" reminder window.
 - **Meds** — add/edit prescriptions and multi-time dose schedules; switch between **Cards** and a
   compact **List** view (the choice is remembered per device).
 - **Stock** — pills on hand, days remaining, low-stock warnings, and **Restock** with a
-  purchase / stock-in date (also settable when adding a medication).
-- **History** — per-day log of every dose.
-- **Settings** — theme, reminders, grace period, log out (also in the desktop sidebar).
+  purchase / stock-in date (also settable when adding a medication). Stock counts down automatically
+  from the stock-in date by each day's scheduled doses.
+- **History** — the last 21 days of (assumed-taken) doses, per day.
+- **Settings** — theme, reminders, log out (also in the desktop sidebar).
 
 ## One-time setup (do this before first use)
 

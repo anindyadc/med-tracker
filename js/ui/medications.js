@@ -3,17 +3,24 @@ import {
   createMedication,
   updateMedication,
   setMedicationActive,
-  deleteMedication,
-  restockTimestamp
+  deleteMedication
 } from '../db.js';
 import { currentUser } from '../auth.js';
 import { initTilt } from '../tilt.js';
 import { escapeHtml, showToast, openModal, closeModal, confirmAction } from './shared.js';
-import { dateKey, dateKeyFromStored } from '../date-utils.js';
+import { dateKey } from '../date-utils.js';
+import { remainingAt, baselineAt } from '../inventory.js';
 
 let filter = 'active';
 let layout = readLayoutPref();
 let scheduleRows = [];
+
+// The form's stock fields describe the stored baseline: "N on hand as of this date".
+function stockFieldDefaults(med) {
+  return med
+    ? { count: String(med.inventory?.count ?? 0), date: dateKey(baselineAt(med)) }
+    : { count: '30', date: dateKey() };
+}
 
 const LAYOUT_KEY = 'medtracker.medsLayout';
 
@@ -34,7 +41,7 @@ function saveLayoutPref(value) {
 }
 
 function stockLabel(med) {
-  const count = med.inventory?.count ?? 0;
+  const count = remainingAt(med);
   return `${count} ${escapeHtml(med.inventory?.unit || 'pill')}${count === 1 ? '' : 's'}`;
 }
 
@@ -157,8 +164,8 @@ function medicationFormHtml(med) {
 
       <div class="field-row">
         <div class="field">
-          <label for="f-count">Current stock</label>
-          <input id="f-count" type="number" min="0" value="${med?.inventory?.count ?? 30}" />
+          <label for="f-count">Quantity on stock-in date</label>
+          <input id="f-count" type="number" min="0" step="0.5" value="${stockFieldDefaults(med).count}" />
         </div>
         <div class="field">
           <label for="f-unit">Unit</label>
@@ -167,7 +174,8 @@ function medicationFormHtml(med) {
       </div>
       <div class="field">
         <label for="f-restock-date">Purchase / stock-in date</label>
-        <input id="f-restock-date" type="date" max="${dateKey()}" value="${dateKeyFromStored(med?.inventory?.lastRestockDate) || dateKey()}" />
+        <input id="f-restock-date" type="date" max="${dateKey()}" value="${stockFieldDefaults(med).date}" />
+        <span class="hint">Doses are assumed taken daily from this date${med ? ` &middot; ${remainingAt(med)} on hand now` : ''}.</span>
       </div>
       <div class="field">
         <label for="f-threshold">Low-stock alert (days remaining)</label>
@@ -231,24 +239,20 @@ function openMedicationForm(med, onSaved) {
         .map((r) => ({ time: r.time, quantity: Number(r.quantity) || 1, label: (r.label || '').trim() })),
       inventory: { count: Number(q('#f-count')), unit: q('#f-unit').trim() || 'pill' }
     };
-    const restockDate = q('#f-restock-date');
+    const restockDate = q('#f-restock-date') || dateKey();
+    const defaults = stockFieldDefaults(med);
+    const stockChanged = q('#f-count') !== defaults.count || restockDate !== defaults.date;
 
     if (!payload.name) return;
 
     try {
       if (med) {
-        await updateMedication(med.id, {
-          ...payload,
-          inventory: {
-            ...med.inventory,
-            count: payload.inventory.count,
-            unit: payload.inventory.unit,
-            // Only rewrite the date if the caregiver changed it, so an older precise timestamp survives.
-            ...(restockDate && restockDate !== dateKeyFromStored(med.inventory?.lastRestockDate)
-              ? { lastRestockDate: restockTimestamp(restockDate) }
-              : {})
-          }
-        });
+        // Untouched stock fields: db rebases to the derived count so schedule edits apply from now on.
+        await updateMedication(
+          med.id,
+          { ...payload, inventory: { unit: payload.inventory.unit } },
+          stockChanged ? { count: payload.inventory.count, date: restockDate } : null
+        );
         showToast(`Saved ${payload.name}`);
       } else {
         await createMedication(
