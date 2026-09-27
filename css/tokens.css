@@ -7,6 +7,12 @@
   --text-primary: #f4f6ff;
   --text-secondary: rgba(244, 246, 255, 0.68);
   --text-muted: rgba(244, 246, 255, 0.45);
+  /* Opaque surface for modals: a nested backdrop-filter (modal inside the blurred backdrop)
+     samples nothing in Chromium/WebKit, so a translucent fill renders as flat black. */
+  --surface-modal: #1c2142;
+  --input-bg: #161a33;
+
+  color-scheme: dark;
 
   --accent-cyan: #22d3ee;
   --accent-violet: #818cf8;
@@ -66,6 +72,9 @@
   --text-primary: #12142b;
   --text-secondary: rgba(18, 20, 43, 0.68);
   --text-muted: rgba(18, 20, 43, 0.48);
+  --surface-modal: #fbfbff;
+  --input-bg: #ffffff;
+  color-scheme: light;
 
   --shadow-ambient: 0 8px 24px rgba(15, 18, 37, 0.08);
   --shadow-far: 0 24px 48px rgba(15, 18, 37, 0.06);
@@ -82,6 +91,9 @@
     --text-primary: #12142b;
     --text-secondary: rgba(18, 20, 43, 0.68);
     --text-muted: rgba(18, 20, 43, 0.48);
+    --surface-modal: #fbfbff;
+    --input-bg: #ffffff;
+    color-scheme: light;
 
     --shadow-ambient: 0 8px 24px rgba(15, 18, 37, 0.08);
     --shadow-far: 0 24px 48px rgba(15, 18, 37, 0.06);
