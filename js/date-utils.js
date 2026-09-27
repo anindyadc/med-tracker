@@ -32,6 +32,15 @@ export function formatDateShort(dateStr) {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+// Stock-in dates are picked as a local calendar day but stored as a Firestore Timestamp at local
+// midnight (older docs hold the server time of the restock). Accepts a Timestamp, Date or key.
+export function dateKeyFromStored(value) {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+  const date = typeof value.toDate === 'function' ? value.toDate() : value;
+  return date instanceof Date && !Number.isNaN(date.getTime()) ? dateKey(date) : '';
+}
+
 export function minutesBetween(a, b) {
   return (b.getTime() - a.getTime()) / 60000;
 }

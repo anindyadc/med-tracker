@@ -3,11 +3,13 @@ import {
   createMedication,
   updateMedication,
   setMedicationActive,
-  deleteMedication
+  deleteMedication,
+  restockTimestamp
 } from '../db.js';
 import { currentUser } from '../auth.js';
 import { initTilt } from '../tilt.js';
 import { escapeHtml, showToast, openModal, closeModal, confirmAction } from './shared.js';
+import { dateKey, dateKeyFromStored } from '../date-utils.js';
 
 let filter = 'active';
 let layout = readLayoutPref();
@@ -164,6 +166,10 @@ function medicationFormHtml(med) {
         </div>
       </div>
       <div class="field">
+        <label for="f-restock-date">Purchase / stock-in date</label>
+        <input id="f-restock-date" type="date" max="${dateKey()}" value="${dateKeyFromStored(med?.inventory?.lastRestockDate) || dateKey()}" />
+      </div>
+      <div class="field">
         <label for="f-threshold">Low-stock alert (days remaining)</label>
         <input id="f-threshold" type="number" min="0" value="${med?.refillReminderThreshold ?? 7}" />
       </div>
@@ -225,6 +231,7 @@ function openMedicationForm(med, onSaved) {
         .map((r) => ({ time: r.time, quantity: Number(r.quantity) || 1, label: (r.label || '').trim() })),
       inventory: { count: Number(q('#f-count')), unit: q('#f-unit').trim() || 'pill' }
     };
+    const restockDate = q('#f-restock-date');
 
     if (!payload.name) return;
 
@@ -232,11 +239,22 @@ function openMedicationForm(med, onSaved) {
       if (med) {
         await updateMedication(med.id, {
           ...payload,
-          inventory: { ...med.inventory, count: payload.inventory.count, unit: payload.inventory.unit }
+          inventory: {
+            ...med.inventory,
+            count: payload.inventory.count,
+            unit: payload.inventory.unit,
+            // Only rewrite the date if the caregiver changed it, so an older precise timestamp survives.
+            ...(restockDate && restockDate !== dateKeyFromStored(med.inventory?.lastRestockDate)
+              ? { lastRestockDate: restockTimestamp(restockDate) }
+              : {})
+          }
         });
         showToast(`Saved ${payload.name}`);
       } else {
-        await createMedication(payload, currentUser()?.uid);
+        await createMedication(
+          { ...payload, inventory: { ...payload.inventory, lastRestockDate: restockDate } },
+          currentUser()?.uid
+        );
         showToast(`Added ${payload.name}`);
       }
       closeModal();

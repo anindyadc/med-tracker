@@ -15,6 +15,7 @@ import {
   Timestamp
 } from './firebase-config.js';
 import { reportPossibleAccessDenied } from './auth.js';
+import { scheduledDateTime } from './date-utils.js';
 
 const MEDICATIONS = 'medications';
 const DOSE_LOGS = 'doseLogs';
@@ -40,6 +41,11 @@ export async function getMedication(id) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
+// `dateStr` is a local YYYY-MM-DD from a date input; stored as local midnight. Falls back to now.
+export function restockTimestamp(dateStr) {
+  return dateStr ? Timestamp.fromDate(scheduledDateTime(dateStr, '00:00')) : serverTimestamp();
+}
+
 export async function createMedication(data, uid) {
   const ref = doc(collection(db, MEDICATIONS));
   const payload = {
@@ -55,7 +61,7 @@ export async function createMedication(data, uid) {
     inventory: {
       count: Number(data.inventory?.count) || 0,
       unit: data.inventory?.unit || 'pill',
-      lastRestockDate: serverTimestamp(),
+      lastRestockDate: restockTimestamp(data.inventory?.lastRestockDate),
       lastRestockAmount: Number(data.inventory?.count) || 0
     },
     active: true,
@@ -79,7 +85,7 @@ export async function deleteMedication(id) {
   await wrap(deleteDoc(doc(db, MEDICATIONS, id)));
 }
 
-export async function restockMedication(id, addedAmount) {
+export async function restockMedication(id, addedAmount, restockDate) {
   await wrap(
     runTransaction(db, async (tx) => {
       const ref = doc(db, MEDICATIONS, id);
@@ -88,7 +94,7 @@ export async function restockMedication(id, addedAmount) {
       const current = snap.data().inventory?.count || 0;
       tx.update(ref, {
         'inventory.count': current + Number(addedAmount),
-        'inventory.lastRestockDate': serverTimestamp(),
+        'inventory.lastRestockDate': restockTimestamp(restockDate),
         'inventory.lastRestockAmount': Number(addedAmount),
         updatedAt: serverTimestamp()
       });

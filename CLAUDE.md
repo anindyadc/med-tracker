@@ -80,6 +80,8 @@ licensing-clarity reason.
   `name, strength, form, doctor, instructions, prescriptionNumber, pharmacy, refillReminderThreshold` (days),
   `schedule: [{time, quantity, label}, ...]` (embedded array — always read/written with the medication,
   never queried independently), `inventory: {count, unit, lastRestockDate, lastRestockAmount}`,
+  (`lastRestockDate` = purchase/stock-in date: a Timestamp at local midnight of the day the caregiver
+  picks; older docs may hold the server time of the restock — read it via `dateKeyFromStored`),
   `active`, timestamps.
 - **`doseLogs/{medicationId_scheduledDate_scheduledTime}`** — one doc per scheduled dose *occurrence*.
   The ID is deterministic so recomputing the schedule repeatedly is idempotent (never creates duplicates).
@@ -109,7 +111,9 @@ Re-run on app load, on `visibilitychange`, and on a ~60s interval while the app 
 8. **Undo** (correcting a mis-tap) reverses the same transaction — status reverts, inventory increments
    back. Must be a confirm-guarded UI action, not a casual toggle.
 9. **Manual restock** (Inventory view) adjusts `inventory.count` / `lastRestockDate` directly,
-   independent of dose logging.
+   independent of dose logging. The caregiver picks the purchase/stock-in date (defaults to today,
+   no future dates); the Add/Edit medication form sets the same field. Setting a date never changes
+   `count` on its own.
 
 ## Security rules (Firestore)
 
@@ -155,6 +159,11 @@ notification support is more limited/version-gated — that's a platform constra
   breakpoint switches to a left sidebar + multi-column grid on laptop. Keep it to these two layouts —
   don't add more breakpoints than this personal app needs. Primary actions ("Mark Taken") ≥44×44px,
   reachable one-handed.
+- The sidebar's Log out item is desktop-only (`.nav-logout`); on phones Log out lives in Settings.
+- Medications view has a Cards/List toggle; the choice is a per-device UI preference in `localStorage`
+  (`medtracker.medsLayout`), not synced via Firestore.
+- Modals use an opaque `--surface-modal` fill (not glass): a `backdrop-filter` nested inside the blurred
+  modal backdrop samples nothing and renders black. Tokens set `color-scheme` so native inputs match.
 
 ## One-time manual setup (outside of code — do this before the app can actually log in)
 

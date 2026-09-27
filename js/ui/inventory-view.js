@@ -2,6 +2,14 @@ import { listMedications, restockMedication } from '../db.js';
 import { daysRemaining, dailyUsage, stockFraction, isLowStock } from '../inventory.js';
 import { initTilt } from '../tilt.js';
 import { escapeHtml, showToast, openModal, closeModal } from './shared.js';
+import { dateKey, dateKeyFromStored, formatDateShort } from '../date-utils.js';
+
+function stockedInText(med) {
+  const key = dateKeyFromStored(med.inventory?.lastRestockDate);
+  if (!key) return '';
+  const amount = med.inventory?.lastRestockAmount;
+  return `Stocked in ${formatDateShort(key)}${amount ? ` (+${amount})` : ''}`;
+}
 
 function inventoryCardHtml(med) {
   const remaining = daysRemaining(med);
@@ -18,6 +26,7 @@ function inventoryCardHtml(med) {
         <span>${med.inventory?.count ?? 0} ${escapeHtml(med.inventory?.unit || 'pill')}s on hand</span>
         <span>${dailyUsage(med)} / day</span>
       </div>
+      ${stockedInText(med) ? `<div class="inventory-stocked-in">${escapeHtml(stockedInText(med))}</div>` : ''}
       <div class="inventory-card-actions">
         <button class="btn btn-secondary btn-sm" data-action="restock">Restock</button>
       </div>
@@ -33,6 +42,10 @@ function restockFormHtml(med) {
       <div class="field">
         <label for="r-amount">Amount added</label>
         <input id="r-amount" type="number" min="1" step="0.5" value="30" required />
+      </div>
+      <div class="field">
+        <label for="r-date">Purchase / stock-in date</label>
+        <input id="r-date" type="date" max="${dateKey()}" value="${dateKey()}" required />
       </div>
       <div style="display:flex; gap: var(--space-3); margin-top: var(--space-5);">
         <button type="button" class="btn btn-ghost" id="cancel-restock">Cancel</button>
@@ -66,7 +79,8 @@ export async function renderInventory() {
         e2.preventDefault();
         const amount = Number(container.querySelector('#r-amount').value);
         if (amount <= 0) return;
-        await restockMedication(med.id, amount);
+        const restockDate = container.querySelector('#r-date').value || dateKey();
+        await restockMedication(med.id, amount, restockDate);
         closeModal();
         showToast(`Restocked ${med.name} (+${amount})`);
         renderInventory();

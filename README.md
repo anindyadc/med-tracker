@@ -12,6 +12,16 @@ PWA install support). Sign-in only works once the one-time Firebase setup below 
 in particular, every caregiver needs an `allowlist` entry (step 5), or they'll be signed straight
 back out with a "not authorized" message.
 
+## Features
+
+- **Today** — due, upcoming, taken and missed doses, with Mark Taken / Skip / Undo.
+- **Meds** — add/edit prescriptions and multi-time dose schedules; switch between **Cards** and a
+  compact **List** view (the choice is remembered per device).
+- **Stock** — pills on hand, days remaining, low-stock warnings, and **Restock** with a
+  purchase / stock-in date (also settable when adding a medication).
+- **History** — per-day log of every dose.
+- **Settings** — theme, reminders, grace period, log out (also in the desktop sidebar).
+
 ## One-time setup (do this before first use)
 
 1. Create a free Firebase project at [console.firebase.google.com](https://console.firebase.google.com).

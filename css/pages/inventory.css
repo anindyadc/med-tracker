@@ -37,6 +37,12 @@
   margin-top: var(--space-2);
 }
 
+.inventory-stocked-in {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+  margin-top: var(--space-1);
+}
+
 .inventory-card-actions {
   display: flex;
   justify-content: flex-end;
