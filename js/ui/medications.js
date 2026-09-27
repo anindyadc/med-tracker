@@ -10,7 +10,31 @@ import { initTilt } from '../tilt.js';
 import { escapeHtml, showToast, openModal, closeModal, confirmAction } from './shared.js';
 
 let filter = 'active';
+let layout = readLayoutPref();
 let scheduleRows = [];
+
+const LAYOUT_KEY = 'medtracker.medsLayout';
+
+function readLayoutPref() {
+  try {
+    return localStorage.getItem(LAYOUT_KEY) === 'list' ? 'list' : 'cards';
+  } catch {
+    return 'cards';
+  }
+}
+
+function saveLayoutPref(value) {
+  try {
+    localStorage.setItem(LAYOUT_KEY, value);
+  } catch {
+    // Storage unavailable (private mode etc.) - the choice just won't persist.
+  }
+}
+
+function stockLabel(med) {
+  const count = med.inventory?.count ?? 0;
+  return `${count} ${escapeHtml(med.inventory?.unit || 'pill')}${count === 1 ? '' : 's'}`;
+}
 
 function medCardHtml(med) {
   const chips = (med.schedule || [])
@@ -23,10 +47,24 @@ function medCardHtml(med) {
           <div class="med-name">${escapeHtml(med.name)}</div>
           <div class="med-strength">${escapeHtml(med.strength || '')} ${med.doctor ? '&middot; ' + escapeHtml(med.doctor) : ''}</div>
         </div>
-        <span class="badge badge-upcoming">${med.inventory?.count ?? 0} ${escapeHtml(med.inventory?.unit || 'pill')}${(med.inventory?.count ?? 0) === 1 ? '' : 's'}</span>
+        <span class="badge badge-upcoming">${stockLabel(med)}</span>
       </div>
       <div class="med-schedule-chips">${chips}</div>
     </div>
+  `;
+}
+
+function medRowHtml(med) {
+  const times = (med.schedule || []).map((s) => s.time).join(', ') || 'No schedule';
+  return `
+    <button type="button" class="med-row ${med.active === false ? 'is-inactive' : ''}" data-id="${med.id}">
+      <span class="med-row-main">
+        <span class="med-name">${escapeHtml(med.name)}</span>
+        <span class="med-strength">${escapeHtml(med.strength || '')}${med.strength && med.form ? ' &middot; ' : ''}${escapeHtml(med.form || '')}</span>
+      </span>
+      <span class="med-row-times">${times}</span>
+      <span class="badge badge-upcoming">${stockLabel(med)}</span>
+    </button>
   `;
 }
 
@@ -222,16 +260,32 @@ export async function renderMedications() {
       <h1>Medications</h1>
       <button class="btn btn-primary" id="add-med-btn">+ Add</button>
     </div>
-    <div class="filter-tabs">
-      <button class="filter-tab ${filter === 'active' ? 'is-active' : ''}" data-filter="active">Active</button>
-      <button class="filter-tab ${filter === 'all' ? 'is-active' : ''}" data-filter="all">All</button>
+    <div class="med-toolbar">
+      <div class="filter-tabs">
+        <button class="filter-tab ${filter === 'active' ? 'is-active' : ''}" data-filter="active">Active</button>
+        <button class="filter-tab ${filter === 'all' ? 'is-active' : ''}" data-filter="all">All</button>
+      </div>
+      <div class="filter-tabs" role="group" aria-label="Layout">
+        <button class="filter-tab ${layout === 'cards' ? 'is-active' : ''}" data-layout="cards" aria-pressed="${layout === 'cards'}">Cards</button>
+        <button class="filter-tab ${layout === 'list' ? 'is-active' : ''}" data-layout="list" aria-pressed="${layout === 'list'}">List</button>
+      </div>
     </div>
     ${visible.length === 0
       ? `<div class="empty-state"><p>No medications yet. Tap "+ Add" to create the first one.</p></div>`
-      : `<div class="med-list">${visible.map(medCardHtml).join('')}</div>`}
+      : layout === 'list'
+        ? `<div class="glass-card med-rows">${visible.map(medRowHtml).join('')}</div>`
+        : `<div class="med-list">${visible.map(medCardHtml).join('')}</div>`}
   `;
 
-  root.querySelectorAll('.filter-tab').forEach((tab) => {
+  root.querySelectorAll('[data-layout]').forEach((tab) => {
+    tab.addEventListener('click', () => {
+      layout = tab.dataset.layout;
+      saveLayoutPref(layout);
+      renderMedications();
+    });
+  });
+
+  root.querySelectorAll('[data-filter]').forEach((tab) => {
     tab.addEventListener('click', () => {
       filter = tab.dataset.filter;
       renderMedications();
@@ -242,7 +296,7 @@ export async function renderMedications() {
     openMedicationForm(null, renderMedications);
   });
 
-  root.querySelectorAll('.med-card').forEach((card) => {
+  root.querySelectorAll('.med-card, .med-row').forEach((card) => {
     card.addEventListener('click', () => {
       const med = medications.find((m) => m.id === card.dataset.id);
       openMedicationForm(med, renderMedications);
