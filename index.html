@@ -59,6 +59,13 @@
     const status = document.getElementById('login-status');
     const submitBtn = document.getElementById('login-submit');
 
+    const deniedUid = new URLSearchParams(window.location.search).get('denied');
+    if (deniedUid !== null) {
+      status.textContent = deniedUid
+        ? `This account is not authorized for MedTracker. Ask your administrator to add allowlist/${deniedUid} in Firestore.`
+        : 'This account is not authorized for MedTracker.';
+    }
+
     watchAuthState(
       () => { window.location.replace('app.html'); },
       () => {}

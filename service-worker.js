@@ -1,4 +1,4 @@
-const CACHE_NAME = 'medtracker-v1';
+const CACHE_NAME = 'medtracker-v2';
 
 const APP_SHELL = [
   './',

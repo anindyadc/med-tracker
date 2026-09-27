@@ -106,9 +106,12 @@
     });
 
     onAccessDenied(async () => {
-      showToast('This account is not authorized for MedTracker.');
+      // Carry the reason (and UID, needed for the allowlist doc) across the redirect -
+      // a toast here would be wiped by the page change before anyone could read it.
+      const uid = currentUser()?.uid || '';
+      console.warn('Firestore permission-denied for UID', uid, '- is allowlist/' + uid + ' present?');
       await logout();
-      window.location.replace('index.html');
+      window.location.replace('index.html?denied=' + encodeURIComponent(uid));
     });
 
     watchAuthState(
