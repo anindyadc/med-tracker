@@ -160,14 +160,17 @@ notification support is more limited/version-gated — that's a platform constra
 
 1. Create a Firebase project (free **Spark** plan — sufficient for this app's scale).
 2. Authentication → Sign-in method → enable **Email/Password** only.
-3. Firestore Database → create in **production mode** → paste in the contents of `firestore.rules`
-   (Firestore Database → Rules) immediately.
+3. Firestore Database → create the `(default)` database in **production mode** → paste in the contents
+   of `firestore.rules` (Firestore Database → Rules) and **Publish** immediately.
 4. Authentication → Users → manually add one account per caregiver.
 5. For each account, copy its UID and create a matching doc at `allowlist/{uid}` in Firestore
-   (`email`, `displayName`, `addedAt`).
+   (`email`, `displayName`, `addedAt`). The **document ID must be the UID** (not Auto-ID) — rules check
+   `exists()` on that path. A missing entry shows up as a forced sign-out; `app.html` redirects to
+   `index.html?denied=<uid>`, which displays the exact path to create.
 6. Project settings → register a Web App → copy the `firebaseConfig` values into `js/firebase-config.js`
    and commit (this is not a secret).
-7. Repo Settings → Pages → Source: GitHub Actions (the existing `deploy.yml` already handles the rest).
+7. Repo Settings → Pages → Source: GitHub Actions (the existing `deploy.yml` already handles the rest;
+   its job declares `environment: github-pages`, which `actions/deploy-pages@v4` requires).
 8. Authentication → Settings → Authorized domains → add the `*.github.io` domain, or `signInWithEmailAndPassword` will fail from the deployed site.
 9. Hand-author `icons/icon.svg`, rasterize to `icon-192.png` / `icon-512.png` / a maskable variant.
 10. Test "Add to Home Screen" on an Android phone and confirm manifest icons render.
