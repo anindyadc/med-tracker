@@ -51,6 +51,10 @@
         <img src="https://cdn.jsdelivr.net/npm/lucide-static@0.462.0/icons/settings.svg" alt="" />
         <span>Settings</span>
       </button>
+      <button class="nav-item nav-logout" id="nav-logout" type="button">
+        <img src="https://cdn.jsdelivr.net/npm/lucide-static@0.462.0/icons/log-out.svg" alt="" />
+        <span>Log out</span>
+      </button>
     </nav>
 
     <main style="flex:1; min-width:0;">
@@ -103,6 +107,12 @@
 
     document.querySelectorAll('[data-nav]').forEach((btn) => {
       btn.addEventListener('click', () => navigate(btn.dataset.view));
+    });
+
+    document.getElementById('nav-logout').addEventListener('click', async () => {
+      if (!window.confirm('Log out of MedTracker?')) return;
+      await logout();
+      window.location.replace('index.html');
     });
 
     onAccessDenied(async () => {

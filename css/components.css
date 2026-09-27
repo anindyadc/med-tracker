@@ -258,6 +258,11 @@
   transform: scale(0.94);
 }
 
+/* Sidebar-only: on phones the tab bar has no room for a sixth item, and Settings has Log out. */
+.nav-logout {
+  display: none;
+}
+
 @media (min-width: 900px) {
   .nav-bar {
     position: sticky;
@@ -291,6 +296,15 @@
 
   .nav-item span {
     font-size: var(--font-sm);
+  }
+
+  .nav-logout {
+    display: flex;
+    margin-top: auto;
+  }
+
+  .nav-logout:hover {
+    color: var(--status-missed);
   }
 }
 
